@@ -3,5 +3,8 @@ mod tokens;
 use tokens::tokenize;
 
 fn main() {
-    tokenize("(+ 1 1)");
+    let tokens = tokenize("(+ 1 1)");
+    for token in tokens {
+        println!("{}", token);
+    }
 }
