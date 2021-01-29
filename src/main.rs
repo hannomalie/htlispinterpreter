@@ -1,4 +1,5 @@
 mod tokens;
+mod ast;
 
 use tokens::tokenize;
 
@@ -7,4 +8,5 @@ fn main() {
     for token in tokens {
         println!("{}", token);
     }
+
 }

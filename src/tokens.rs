@@ -1,13 +1,14 @@
 use crate::tokens::Token::{OpenBrace, CloseBrace, Whitespace, String};
 use std::fmt::{Formatter, Error};
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
     OpenBrace,
     CloseBrace,
     Whitespace,
     String(std::string::String)
 }
+
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
@@ -39,15 +40,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn tokenizing_works() {
         let tokens = tokenize("(+ 1 1)");
         assert_eq!(tokens.len(), 7);
         assert_eq!(tokens.get(0).unwrap(), &OpenBrace);
-        assert_eq!(tokens.get(1).unwrap(), "+");
+        assert_eq!(tokens.get(1).unwrap(), &String(std::string::String::from("+")));
         assert_eq!(tokens.get(2).unwrap(), &Whitespace);
-        assert_eq!(tokens.get(3).unwrap(), "1");
+        assert_eq!(tokens.get(3).unwrap(), &String(std::string::String::from("1")));
         assert_eq!(tokens.get(4).unwrap(), &Whitespace);
-        assert_eq!(tokens.get(5).unwrap(), "1");
+        assert_eq!(tokens.get(5).unwrap(), &String(std::string::String::from("1")));
         assert_eq!(tokens.get(6).unwrap(), &CloseBrace);
     }
 }
