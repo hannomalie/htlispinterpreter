@@ -4,65 +4,68 @@ use std::fmt::{Display, Formatter, Error, Debug};
 
 
 #[derive(Debug)]
-enum Ast {
+pub enum Ast {
     Leaf(Token),
-    Node(Token, Vec<Ast>)
+    Node(Vec<Ast>) // TODO: Make operation a single property, not part of vec
 }
 impl Display for Ast {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         // TODO: Don't ignore results
         match self {
             Leaf(token) => { f.write_str(&token.to_string()); }
-            Node(operation, _) => { f.write_str(&operation.to_string()); }
+            Node(tokens) => { f.write_str(&tokens.first().unwrap().to_string()); }
         }
         Ok(())
     }
 }
 
-fn to_ast(tokens: &Vec<Token>) -> Vec<Ast> {
-    println!("Got {} elements in token input vector", tokens.len());
-    let open_brace_index = tokens.iter().position(|it| match it {
-        Token::OpenBrace => { true }
-        Token::CloseBrace => { false }
-        Token::Whitespace => { false }
-        Token::String(_) => { false }
-    });
-    match open_brace_index {
-        None => {
-            let mut leafs = Vec::new();
-            for (_i, token) in tokens.iter().enumerate() {
-                match token {
-                    Token::OpenBrace => {  }
-                    Token::CloseBrace => {  }
-                    Token::Whitespace => {  }
-                    Token::String(_) => { leafs.push(Leaf(token.clone())) }
-                }
-            }
-            println!("Adding {} elements as leafs", leafs.len());
-            leafs
-        }
-        Some(open_brace_index) => {
-            let close_brace_index = tokens.iter().position(|it| match it {
-                Token::OpenBrace => { false }
-                Token::CloseBrace => { true }
-                Token::Whitespace => { false }
-                Token::String(_) => { false }
-            });
-            println!("Got open_brace_index of {}", open_brace_index);
+pub fn to_ast(tokens: &Vec<Token>) -> Vec<crate::ast::Ast> {
 
-            match close_brace_index {
-                None => { panic!("Missing close brace!") }
-                Some(close_brace_index) => {
-                    println!("Got close_brace_index of {}", close_brace_index);
-                    let operation = tokens.get(open_brace_index + 1).unwrap().clone();
-                    let mut tail = Vec::new();
-                    let token_slice = &tokens[open_brace_index+2..close_brace_index]; // +2 because fitst element after bracket is operation
-                    for (_i, it) in token_slice.iter().enumerate() { tail.push(it.clone()) }
-                    vec!(Node(operation, to_ast(&tail)))
+    let mut scopes: Vec<crate::ast::Ast> = Vec::new();
+    let mut brace_balance = 0;
+
+    for (_i, token) in tokens.iter().enumerate() {
+        match token {
+            Token::OpenBrace => {
+                scopes.push(Node(Vec::new()));
+                brace_balance+=1;
+            }
+            Token::CloseBrace => {
+                if !scopes.is_empty() {
+                    let last_scope = scopes.remove(scopes.len()-1);
+                    match scopes.last_mut() {
+                        None => { return vec!(last_scope) }
+                        Some(scope_before) => {
+                            match scope_before {
+                                Leaf(_) => { panic!("Scope before is a leaf!") }
+                                Node(tokens) => { tokens.push(last_scope) }
+                            }
+                        }
+                    }
+                }
+                brace_balance-=1;
+            }
+            Token::Whitespace => {}
+            Token::String(_) => {
+                match scopes.last_mut() {
+                    None => { panic!("No opening brace found!") }
+                    Some(scope) => {
+                        match scope {
+                            Leaf(_) => { panic!("Cannot add token to leaf!") }
+                            Node(tokens) => {
+                                tokens.push(Leaf(token.clone()));
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
+
+    if brace_balance != 0 { panic!("Unequal amount of braces!"); }
+
+    scopes
 }
 
 #[cfg(test)]
@@ -83,17 +86,70 @@ mod tests {
             Leaf(_) => {
                 panic!("Expected ast to be a node, but got leaf");
             }
-            Node(operation, operands) => {
-                assert_eq!(operation, &String(std::string::String::from("+")));
-                assert_eq!(operands.len(), 2);
-                assert_eq!(match operands.get(0).unwrap() {
+            Node(elements) => {
+                let operation = elements.first().unwrap();
+                match operation {
+                    Leaf(token) => { assert_eq!(token, &String(std::string::String::from("+"))); }
+                    Node(_) => { panic!("Expected operation to be a leaf, but got node") }
+                }
+                assert_eq!(elements.len(), 3);
+                assert_eq!(match elements.get(1).unwrap() {
                     Leaf(token) => { token }
-                    Node(_, _) => { panic!("Expected operand to be a leaf, but got node") }
+                    Node(_) => { panic!("Expected operand to be a leaf, but got node") }
                 }, &String(std::string::String::from("1")));
-                assert_eq!(match operands.get(1).unwrap() {
+                assert_eq!(match elements.get(2).unwrap() {
                     Leaf(token) => { token }
-                    Node(_, _) => { panic!("Expected operand to be a leaf, but got node") }
+                    Node(_) => { panic!("Expected operand to be a leaf, but got node") }
                 }, &String(std::string::String::from("1")));
+            }
+        }
+    }
+
+    #[test]
+    fn complex_ast_is_parsed_correctly() {
+        let tokens = tokenize("(+ 1 (- 5 2))");
+        assert_eq!(tokens.len(), 13);
+        let asts = to_ast(&tokens);
+
+        assert_eq!(asts.len(), 1);
+        let ast = asts.first().unwrap();
+        match ast {
+            Leaf(_) => {
+                panic!("Expected ast to be a node, but got leaf");
+            }
+            Node(elements) => {
+                let operation = elements.first().unwrap();
+                match operation {
+                    Leaf(token) => { assert_eq!(token, &String(std::string::String::from("+"))); }
+                    Node(_) => { panic!("Expected operation to be a leaf, but got node") }
+                }
+                assert_eq!(elements.len(), 3);
+
+                assert_eq!(match elements.get(1).unwrap() {
+                    Leaf(token) => { token }
+                    Node(_) => { panic!("Expected operand to be a leaf, but got node") }
+                }, &String(std::string::String::from("1")));
+
+                match elements.get(2).unwrap() {
+                    Leaf(_) => { panic!("Expected operand to be a node, but got leaf") }
+                    Node(elements) => {
+                        let operation = elements.first().unwrap();
+                        match operation {
+                            Leaf(token) => { assert_eq!(token, &String(std::string::String::from("-"))); }
+                            Node(_) => { panic!("Expected operation to be a leaf, but got node") }
+                        }
+
+                        assert_eq!(match elements.get(1).unwrap() {
+                            Leaf(token) => { token }
+                            Node(_) => { panic!("Expected operand to be a leaf, but got node") }
+                        }, &String(std::string::String::from("5")));
+
+                        assert_eq!(match elements.get(2).unwrap() {
+                            Leaf(token) => { token }
+                            Node(_) => { panic!("Expected operand to be a leaf, but got node") }
+                        }, &String(std::string::String::from("2")));
+                    }
+                };
             }
         }
     }
