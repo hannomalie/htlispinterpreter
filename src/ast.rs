@@ -1,6 +1,7 @@
 use crate::tokens::Token;
 use crate::ast::Ast::{Node, Leaf};
 use std::fmt::{Display, Formatter, Error, Debug};
+use crate::ast::AstError::UnbalancedBraces;
 
 
 #[derive(Debug)]
@@ -19,16 +20,20 @@ impl Display for Ast {
     }
 }
 
+pub enum AstError {
+    UnbalancedBraces { tokens: Vec<Ast>, expected_brace_after_token: usize }
+}
+
 pub trait AstSpanner {
-    fn to_ast(&self) -> Vec<crate::ast::Ast>;
+    fn to_ast(&self) -> Result<Vec<crate::ast::Ast>, AstError>;
 }
 impl AstSpanner for Vec<Token> {
-    fn to_ast(&self) -> Vec<crate::ast::Ast> {
+    fn to_ast(&self) -> Result<Vec<crate::ast::Ast>, AstError> {
 
         let mut scopes: Vec<crate::ast::Ast> = Vec::new();
         let mut brace_balance = 0;
 
-        for (_i, token) in self.iter().enumerate() {
+        for (index, token) in self.iter().enumerate() {
             match token {
                 Token::OpenBrace => {
                     scopes.push(Node(Vec::new()));
@@ -38,7 +43,7 @@ impl AstSpanner for Vec<Token> {
                     if !scopes.is_empty() {
                         let last_scope = scopes.remove(scopes.len()-1);
                         match scopes.last_mut() {
-                            None => { return vec!(last_scope) }
+                            None => { return Ok(vec!(last_scope)) }
                             Some(scope_before) => {
                                 match scope_before {
                                     Leaf(_) => { panic!("Scope before is a leaf!") }
@@ -52,7 +57,12 @@ impl AstSpanner for Vec<Token> {
                 Token::Whitespace => {}
                 Token::String(_) => {
                     match scopes.last_mut() {
-                        None => { panic!("No opening brace found!") }
+                        None => {
+                            return Err(UnbalancedBraces {
+                                tokens: scopes,
+                                expected_brace_after_token: index
+                            })
+                        }
                         Some(scope) => {
                             match scope {
                                 Leaf(_) => { panic!("Cannot add token to leaf!") }
@@ -67,9 +77,12 @@ impl AstSpanner for Vec<Token> {
         }
 
 
-        if brace_balance != 0 { panic!("Unequal amount of braces!"); }
-
-        scopes
+        return if brace_balance != 0 {
+            Err(UnbalancedBraces {
+                tokens: scopes,
+                expected_brace_after_token: self.len()
+            })
+        } else { Ok(scopes) }
     }
 }
 
@@ -83,7 +96,7 @@ mod tests {
     fn simple_ast_is_parsed_correctly() {
         let tokens = "(+ 1 1)".tokenize();
         assert_eq!(tokens.len(), 7);
-        let asts = &tokens.to_ast();
+        let asts = &tokens.to_ast().ok().unwrap();
 
         assert_eq!(asts.len(), 1);
         let ast = asts.first().unwrap();
@@ -111,10 +124,33 @@ mod tests {
     }
 
     #[test]
+    fn unequal_braces_are_recognized_correctly() {
+        let tokens = "(+ 1 1".tokenize();
+        let error = &tokens.to_ast().err().unwrap();
+
+        match error {
+            AstError::UnbalancedBraces { tokens: asts, expected_brace_after_token } => {
+                assert_eq!(expected_brace_after_token, &6);
+                match asts.first().unwrap() {
+                    Leaf(_) => { panic!("Expected ast to be a node, but got leaf"); }
+                    Node(asts) => {
+                        match asts.first().unwrap() {
+                            Leaf(token) => {
+                                assert_eq!(token, &String(std::string::String::from("+")));
+                            }
+                            Node(_) => { panic!("Expected ast to be a leaf, but got node"); }
+                        }
+                    }
+                };
+            }
+        }
+    }
+
+    #[test]
     fn complex_ast_is_parsed_correctly() {
         let tokens = "(+ 1 (- 5 2))".tokenize();
         assert_eq!(tokens.len(), 13);
-        let asts = &tokens.to_ast();
+        let asts = &tokens.to_ast().ok().unwrap();
 
         assert_eq!(asts.len(), 1);
         let ast = asts.first().unwrap();

@@ -1,6 +1,5 @@
 use crate::tokens::Token;
 use crate::ast::Ast::*;
-use crate::ast::Ast;
 
 pub trait Interpreter {
     fn interpret(&self) -> std::string::String;
@@ -50,13 +49,13 @@ impl Interpreter for crate::ast::Ast {
 mod tests {
     use super::*;
     use crate::tokens::Tokenizer;
-    use crate::ast::to_ast;
+    use crate::ast::AstSpanner;
 
     #[test]
     fn simple_ast_is_interpreted_correctly() {
         let tokens = "(+ 1 1)".tokenize();
-        let asts = to_ast(&tokens);
-        let result = interpret(asts.first().unwrap());
+        let asts = &tokens.to_ast().ok().unwrap();
+        let result = asts.first().unwrap().interpret();
         assert_eq!(result, "2")
 
     }

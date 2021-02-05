@@ -18,9 +18,9 @@ fn main() {
 
         std::panic::catch_unwind(|| {
             let tokens = input_trimmed.tokenize();
-            let asts = &tokens.to_ast();
+            let asts = &tokens.to_ast().ok().unwrap();
 
-            for(ast) in asts {
+            for ast in asts {
                 println!("{}", &ast.interpret())
             }
         });
