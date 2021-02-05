@@ -2,9 +2,9 @@ mod tokens;
 mod ast;
 mod interpreter;
 
-use tokens::tokenize;
-use ast::to_ast;
-use interpreter::interpret;
+use tokens::Tokenizer;
+use interpreter::Interpreter;
+use crate::ast::AstSpanner;
 
 fn main() {
     let mut input = String::new();
@@ -17,11 +17,11 @@ fn main() {
 
 
         std::panic::catch_unwind(|| {
-            let tokens = tokenize(input_trimmed);
-            let asts = to_ast(&tokens);
+            let tokens = input_trimmed.tokenize();
+            let asts = &tokens.to_ast();
 
             for(ast) in asts {
-                println!("{}", interpret(&ast))
+                println!("{}", &ast.interpret())
             }
         });
 

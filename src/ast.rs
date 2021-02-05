@@ -19,66 +19,71 @@ impl Display for Ast {
     }
 }
 
-pub fn to_ast(tokens: &Vec<Token>) -> Vec<crate::ast::Ast> {
+pub trait AstSpanner {
+    fn to_ast(&self) -> Vec<crate::ast::Ast>;
+}
+impl AstSpanner for Vec<Token> {
+    fn to_ast(&self) -> Vec<crate::ast::Ast> {
 
-    let mut scopes: Vec<crate::ast::Ast> = Vec::new();
-    let mut brace_balance = 0;
+        let mut scopes: Vec<crate::ast::Ast> = Vec::new();
+        let mut brace_balance = 0;
 
-    for (_i, token) in tokens.iter().enumerate() {
-        match token {
-            Token::OpenBrace => {
-                scopes.push(Node(Vec::new()));
-                brace_balance+=1;
-            }
-            Token::CloseBrace => {
-                if !scopes.is_empty() {
-                    let last_scope = scopes.remove(scopes.len()-1);
-                    match scopes.last_mut() {
-                        None => { return vec!(last_scope) }
-                        Some(scope_before) => {
-                            match scope_before {
-                                Leaf(_) => { panic!("Scope before is a leaf!") }
-                                Node(tokens) => { tokens.push(last_scope) }
+        for (_i, token) in self.iter().enumerate() {
+            match token {
+                Token::OpenBrace => {
+                    scopes.push(Node(Vec::new()));
+                    brace_balance+=1;
+                }
+                Token::CloseBrace => {
+                    if !scopes.is_empty() {
+                        let last_scope = scopes.remove(scopes.len()-1);
+                        match scopes.last_mut() {
+                            None => { return vec!(last_scope) }
+                            Some(scope_before) => {
+                                match scope_before {
+                                    Leaf(_) => { panic!("Scope before is a leaf!") }
+                                    Node(tokens) => { tokens.push(last_scope) }
+                                }
                             }
                         }
                     }
+                    brace_balance-=1;
                 }
-                brace_balance-=1;
-            }
-            Token::Whitespace => {}
-            Token::String(_) => {
-                match scopes.last_mut() {
-                    None => { panic!("No opening brace found!") }
-                    Some(scope) => {
-                        match scope {
-                            Leaf(_) => { panic!("Cannot add token to leaf!") }
-                            Node(tokens) => {
-                                tokens.push(Leaf(token.clone()));
+                Token::Whitespace => {}
+                Token::String(_) => {
+                    match scopes.last_mut() {
+                        None => { panic!("No opening brace found!") }
+                        Some(scope) => {
+                            match scope {
+                                Leaf(_) => { panic!("Cannot add token to leaf!") }
+                                Node(tokens) => {
+                                    tokens.push(Leaf(token.clone()));
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
+
+        if brace_balance != 0 { panic!("Unequal amount of braces!"); }
+
+        scopes
     }
-
-
-    if brace_balance != 0 { panic!("Unequal amount of braces!"); }
-
-    scopes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tokens::tokenize;
+    use crate::tokens::Tokenizer;
     use crate::tokens::Token::String;
 
     #[test]
     fn simple_ast_is_parsed_correctly() {
-        let tokens = tokenize("(+ 1 1)");
+        let tokens = "(+ 1 1)".tokenize();
         assert_eq!(tokens.len(), 7);
-        let asts = to_ast(&tokens);
+        let asts = &tokens.to_ast();
 
         assert_eq!(asts.len(), 1);
         let ast = asts.first().unwrap();
@@ -107,9 +112,9 @@ mod tests {
 
     #[test]
     fn complex_ast_is_parsed_correctly() {
-        let tokens = tokenize("(+ 1 (- 5 2))");
+        let tokens = "(+ 1 (- 5 2))".tokenize();
         assert_eq!(tokens.len(), 13);
-        let asts = to_ast(&tokens);
+        let asts = &tokens.to_ast();
 
         assert_eq!(asts.len(), 1);
         let ast = asts.first().unwrap();

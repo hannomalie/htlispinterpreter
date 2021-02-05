@@ -20,19 +20,25 @@ impl std::fmt::Display for Token {
     }
 }
 
-pub fn tokenize(input: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
+pub trait Tokenizer {
+    fn tokenize(&self) -> Vec<Token>;
+}
 
-    for (_i, &item) in input.as_bytes().iter().enumerate() {
-        if item == b'(' {
-            tokens.push(OpenBrace)
-        } else if item == b')' {
-            tokens.push(CloseBrace)
-        } else if item == b' ' {
-            tokens.push(Whitespace)
-        } else { tokens.push(String(std::string::String::from_utf8(vec![item]).unwrap())) }
+impl Tokenizer for str {
+    fn tokenize(&self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+
+        for (_i, &item) in self.as_bytes().iter().enumerate() {
+            if item == b'(' {
+                tokens.push(OpenBrace)
+            } else if item == b')' {
+                tokens.push(CloseBrace)
+            } else if item == b' ' {
+                tokens.push(Whitespace)
+            } else { tokens.push(String(std::string::String::from_utf8(vec![item]).unwrap())) }
+        }
+        tokens
     }
-    tokens
 }
 
 #[cfg(test)]
@@ -41,7 +47,7 @@ mod tests {
 
     #[test]
     fn simple_tokenizing_works() {
-        let tokens = tokenize("(+ 1 1)");
+        let tokens = "(+ 1 1)".tokenize();
         assert_eq!(tokens.len(), 7);
         assert_eq!(tokens.get(0).unwrap(), &OpenBrace);
         assert_eq!(tokens.get(1).unwrap(), &String(std::string::String::from("+")));
@@ -53,7 +59,7 @@ mod tests {
     }
     #[test]
     fn complex_tokenizing_works() {
-        let tokens = tokenize("(+ 1 (- 5 2))");
+        let tokens = "(+ 1 (- 5 2))".tokenize();
         assert_eq!(tokens.len(), 13);
         assert_eq!(tokens.get(0).unwrap(), &OpenBrace);
         assert_eq!(tokens.get(1).unwrap(), &String(std::string::String::from("+")));
